@@ -131,6 +131,34 @@ Examples: `aliyun-main-access-key-id`, `databricks-dev-token`,
 `github-pat-personal`, `aliyun-cn-dev-rds-password`. It keeps
 `secret list` readable as the number of entries grows past a dozen.
 
+## Why this is agent-friendly
+
+The shape ends up being a particularly good fit for coding agents
+and other shell-out tools:
+
+- **Credentials never enter the agent's context.** When the agent
+  runs `cmd --token=$(secret get foo)`, the shell substitutes the
+  value before `exec` — the literal string the agent sees, logs, and
+  replays is `$(secret get foo)`. No raw credential ever lands in
+  the conversation transcript.
+- **Smallest blast radius for shell-out.** Agents shell out
+  constantly. Anything you `export` lives the whole session and is
+  inherited by every sibling tool call. `$(secret get …)` lives one
+  command and dies — if the agent goes off the rails later, the
+  credential isn't sitting in the environment to be exfiltrated.
+- **Loud failure is what an agent needs.** Agents lack the human
+  "wait, why is this empty?" instinct. Exit 1 plus a stderr message
+  lets the agent notice and ask for help, instead of silently firing
+  an unauthenticated request at production.
+- **Self-describing inventory.** `secret list -l` lets the agent
+  discover what's available and what each entry is for — the
+  description field doubles as machine-readable metadata, so you
+  don't have to maintain a separate `credentials.md` for the agent
+  to keep in sync.
+- **Non-interactive by design.** `secret get` works with no tty;
+  `secret add` reads from stdin if it's piped. Nothing stalls on
+  "press any key to continue."
+
 ## How it works
 
 Each entry is one generic-password record:
