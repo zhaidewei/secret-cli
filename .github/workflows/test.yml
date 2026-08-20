@@ -27,14 +27,14 @@ jobs:
         run: |
           $name = "secret-cli-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           try {
-            if ((& ./bin/secret.ps1 --version) -ne 'secret 0.2.0') { throw 'unexpected version' }
-            & ./bin/secret.ps1 --help | Out-Null
+            if ((pwsh -NoProfile -File ./bin/secret.ps1 --version) -ne 'secret 0.2.0') { throw 'unexpected version' }
+            pwsh -NoProfile -File ./bin/secret.ps1 --help | Out-Null
             'first-value' | pwsh -NoProfile -File ./bin/secret.ps1 add $name 'CI credential'
-            if ((& ./bin/secret.ps1 get $name) -ne 'first-value') { throw 'add/get failed' }
-            if (-not ((& ./bin/secret.ps1 list) -contains $name)) { throw 'list failed' }
+            if ((pwsh -NoProfile -File ./bin/secret.ps1 get $name) -ne 'first-value') { throw 'add/get failed' }
+            if (-not ((pwsh -NoProfile -File ./bin/secret.ps1 list) -contains $name)) { throw 'list failed' }
             'second-value' | pwsh -NoProfile -File ./bin/secret.ps1 update $name
-            if ((& ./bin/secret.ps1 get $name) -ne 'second-value') { throw 'update failed' }
+            if ((pwsh -NoProfile -File ./bin/secret.ps1 get $name) -ne 'second-value') { throw 'update failed' }
           }
           finally {
-            & ./bin/secret.ps1 rm $name 2>$null
+            pwsh -NoProfile -File ./bin/secret.ps1 rm $name 2>$null
           }
