@@ -1,0 +1,48 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install shellcheck
+      - run: ./tests/run.sh
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        powershell: [pwsh, powershell.exe]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise Credential Manager lifecycle
+        run: |
+          $exe = '${{ matrix.powershell }}'
+          $flavor = $exe.Replace('.exe', '').Replace('powershell', 'winps')
+          $name = "secret-cli-ci-$flavor-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          try {
+            if ((& $exe -NoProfile -File ./bin/secret.ps1 --version) -ne 'secret 0.2.0') { throw 'unexpected version' }
+            & $exe -NoProfile -File ./bin/secret.ps1 --help | Out-Null
+            'first-value' | & $exe -NoProfile -File ./bin/secret.ps1 add $name 'CI credential'
+            if ((& $exe -NoProfile -File ./bin/secret.ps1 get $name) -ne 'first-value') { throw 'add/get failed' }
+            if (-not ((& $exe -NoProfile -File ./bin/secret.ps1 list) -contains $name)) { throw 'list failed' }
+            'second-value' | & $exe -NoProfile -File ./bin/secret.ps1 update $name
+            if ((& $exe -NoProfile -File ./bin/secret.ps1 get $name) -ne 'second-value') { throw 'update failed' }
+            if ($exe -eq 'pwsh') {
+              if ((cmd /c bin\secret.cmd --version) -ne 'secret 0.2.0') { throw 'cmd launcher failed' }
+            }
+          }
+          finally {
+            & $exe -NoProfile -File ./bin/secret.ps1 rm $name 2>$null
+          }
