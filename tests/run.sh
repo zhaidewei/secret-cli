@@ -4,3 +4,4 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/tests/test_static.sh"
 "$ROOT/tests/test_mac.sh"
+"$ROOT/tests/test_install.sh"

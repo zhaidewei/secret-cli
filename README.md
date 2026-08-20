@@ -55,7 +55,7 @@ pwsh -File .\secret.ps1 list
 The Windows implementation uses only built-in .NET and
 `Advapi32.dll`; no PowerShell module is required. It supports Windows
 PowerShell 5.1 and PowerShell 7+. Windows Credential Manager limits generic
-credential blobs to 512 bytes.
+credential blobs to 2560 bytes.
 
 > The Windows implementation has been reviewed and statically checked, but the
 > v0.2.0 release has not yet been exercised on a physical Windows machine.

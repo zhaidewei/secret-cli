@@ -69,12 +69,15 @@ Add-Type -TypeDefinition $signature -ErrorAction Stop
 
 $CRED_TYPE_GENERIC          = 1
 $CRED_PERSIST_LOCAL_MACHINE = 2
+$ERROR_NOT_FOUND            = 1168
 
 function Get-RawCredential {
     param([Parameter(Mandatory)][string]$TargetName)
     $ptr = [IntPtr]::Zero
     if (-not [CredMan]::CredRead($TargetName, $CRED_TYPE_GENERIC, 0, [ref]$ptr)) {
-        return $null
+        $errorCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        if ($errorCode -eq $ERROR_NOT_FOUND) { return $null }
+        throw "CredRead failed: Win32 error $errorCode"
     }
     try {
         $cred = [System.Runtime.InteropServices.Marshal]::PtrToStructure($ptr, [type][CredMan+CREDENTIAL])
@@ -97,8 +100,8 @@ function Get-RawCredential {
 function Write-Credential {
     param([string]$TargetName, [string]$Value, [string]$Comment)
     $bytes = [System.Text.Encoding]::Unicode.GetBytes($Value)
-    if ($bytes.Length -gt 512) {
-        throw "Secret is too large for Windows Credential Manager (maximum: 512 bytes; actual: $($bytes.Length) bytes)"
+    if ($bytes.Length -gt 2560) {
+        throw "Secret is too large for Windows Credential Manager (maximum: 2560 bytes; actual: $($bytes.Length) bytes)"
     }
     $blobPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal([Math]::Max($bytes.Length, 1))
     try {
@@ -117,6 +120,10 @@ function Write-Credential {
             throw "CredWrite failed: Win32 error $([System.Runtime.InteropServices.Marshal]::GetLastWin32Error())"
         }
     } finally {
+        if ($bytes.Length -gt 0) {
+            $zeros = New-Object byte[] $bytes.Length
+            [System.Runtime.InteropServices.Marshal]::Copy($zeros, 0, $blobPtr, $zeros.Length)
+        }
         [System.Runtime.InteropServices.Marshal]::FreeHGlobal($blobPtr)
     }
 }
@@ -197,8 +204,12 @@ function Invoke-List {
     $ptr = [IntPtr]::Zero
     $ok = [CredMan]::CredEnumerate("$Prefix*", 0, [ref]$count, [ref]$ptr)
     if (-not $ok) {
-        if ($long) { Write-Output "NAME`tDESCRIPTION" }
-        return
+        $errorCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        if ($errorCode -eq $ERROR_NOT_FOUND) {
+            if ($long) { Write-Output "NAME`tDESCRIPTION" }
+            return
+        }
+        throw "CredEnumerate failed: Win32 error $errorCode"
     }
     try {
         $rows = for ($i = 0; $i -lt $count; $i++) {
@@ -267,8 +278,12 @@ function Invoke-Rm {
     param([string]$Name)
     if (-not $Name) { [Console]::Error.WriteLine("secret name required"); exit 1 }
     if (-not [CredMan]::CredDelete("$Prefix$Name", $CRED_TYPE_GENERIC, 0)) {
-        [Console]::Error.WriteLine("ERROR: secret '$Name' not found")
-        exit 1
+        $errorCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        if ($errorCode -eq $ERROR_NOT_FOUND) {
+            [Console]::Error.WriteLine("ERROR: secret '$Name' not found")
+            exit 1
+        }
+        throw "CredDelete failed: Win32 error $errorCode"
     }
     [Console]::Error.WriteLine("Deleted: $Name")
 }
