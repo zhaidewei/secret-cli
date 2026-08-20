@@ -84,8 +84,12 @@ function Get-RawCredential {
         $value = ''
         if ($cred.CredentialBlobSize -gt 0) {
             $bytes = New-Object byte[] $cred.CredentialBlobSize
-            [System.Runtime.InteropServices.Marshal]::Copy($cred.CredentialBlob, $bytes, 0, $cred.CredentialBlobSize)
-            $value = [System.Text.Encoding]::Unicode.GetString($bytes)
+            try {
+                [System.Runtime.InteropServices.Marshal]::Copy($cred.CredentialBlob, $bytes, 0, $cred.CredentialBlobSize)
+                $value = [System.Text.Encoding]::Unicode.GetString($bytes)
+            } finally {
+                [Array]::Clear($bytes, 0, $bytes.Length)
+            }
         }
         return [pscustomobject]@{
             TargetName = $cred.TargetName
@@ -120,11 +124,17 @@ function Write-Credential {
             throw "CredWrite failed: Win32 error $([System.Runtime.InteropServices.Marshal]::GetLastWin32Error())"
         }
     } finally {
-        if ($bytes.Length -gt 0) {
-            $zeros = New-Object byte[] $bytes.Length
-            [System.Runtime.InteropServices.Marshal]::Copy($zeros, 0, $blobPtr, $zeros.Length)
+        try {
+            for ($i = 0; $i -lt $bytes.Length; $i++) {
+                [System.Runtime.InteropServices.Marshal]::WriteByte($blobPtr, $i, 0)
+            }
+        } finally {
+            try {
+                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($blobPtr)
+            } finally {
+                [Array]::Clear($bytes, 0, $bytes.Length)
+            }
         }
-        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($blobPtr)
     }
 }
 
